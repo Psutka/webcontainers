@@ -16,10 +16,7 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "resolveJsonModule": true,
-    "baseUrl": "./",
-    "paths": {
-      "@/*": ["packages/*/src/*"]
-    }
+    "baseUrl": "./"
   },
   "include": [],
   "exclude": ["node_modules", "**/dist", "**/.next"]

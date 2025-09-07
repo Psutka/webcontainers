@@ -67,10 +67,18 @@ pnpm --filter app-container build    # TypeScript compilation
 
 ### Testing Commands
 ```bash
+# Container Gateway (NestJS) Tests
 pnpm --filter container-gw test              # Unit tests
 pnpm --filter container-gw test:watch        # Watch mode
 pnpm --filter container-gw test:e2e          # End-to-end tests
 pnpm --filter container-gw test:cov          # Coverage report
+pnpm --filter container-gw test:debug        # Debug tests with inspect
+
+# Linting and Formatting
+pnpm --filter container-gw lint              # ESLint with auto-fix
+pnpm --filter container-gw format            # Prettier formatting
+pnpm --filter client-app lint                # Next.js ESLint
+pnpm --filter app-container lint             # ESLint for AppContainer
 ```
 
 ## Critical Architecture Patterns
@@ -91,11 +99,13 @@ This prevents race conditions when clients reconnect by replaying missed events.
 6. Real-time communication established for terminal I/O and file operations
 
 ### Docker Integration Details
-- **Base Image**: `node:alpine` with npm installation
+- **Base Image**: `node:alpine` with npm installation and latest npm version
 - **Network Access**: Uses `host.docker.internal` for container-to-host communication
-- **Port Mapping**: Exposes container port 3000 for web app previews
+- **Port Mapping**: Exposes container port 3000 for web app previews (auto-assigned host port)
 - **File System**: Containers use `/app` as working directory
 - **Environment Variables**: `CONTAINER_ID`, `GATEWAY_URL`, `NODE_ENV`
+- **AppContainer Injection**: `setup-container.js` script dynamically injects AppContainer service code
+- **Service Installation**: Auto-installs `socket.io-client` and creates `package.json` in container
 
 ### WebSocket Event System
 **Client → Gateway → Container Events**:
@@ -114,7 +124,10 @@ This prevents race conditions when clients reconnect by replaying missed events.
 ### Required Environment Variables
 - **ContainerGw**: `PORT` (default: 9001) - Gateway server port
 - **ClientApp**: `NEXT_PUBLIC_CONTAINER_GW_URL` - Gateway URL for API calls
-- **AppContainer**: Set automatically by ContainerGw during container creation
+- **AppContainer**: Set automatically by ContainerGw during container creation:
+  - `CONTAINER_ID` - Unique container identifier (UUID)
+  - `GATEWAY_URL` - WebSocket connection URL with host.docker.internal
+  - `NODE_ENV` - Set to 'development'
 
 ### Port Configuration Notes
 - Use `PORT=9001` to avoid common port conflicts (3001, 8080, 9000 often in use)
@@ -136,8 +149,11 @@ This prevents race conditions when clients reconnect by replaying missed events.
 
 ### Container Management
 - Containers automatically pull `node:alpine` image if not present
-- AppContainer service code is dynamically injected, not built into image
-- Use Docker commands to inspect running containers and debug issues
+- AppContainer service code is dynamically injected via `setup-container.js`, not built into image
+- Service logs available at `/app/app-container.log` inside container
+- Use Docker commands to inspect running containers and debug issues:
+  - `docker exec <container> ps aux | grep app-container` - Check if service is running
+  - `docker exec <container> cat /app/app-container.log` - View service logs
 - Container state is tracked in memory - does not persist across gateway restarts
 
 ## Important Implementation Notes
