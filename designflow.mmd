@@ -1,0 +1,104 @@
+sequenceDiagram
+    participant C as ClientApp<br/>(Next.js:3000)
+    participant G as ContainerGw<br/>(NestJS:9001)
+    participant D as Docker Engine
+    participant A as AppContainer<br/>(Inside Docker)
+
+    Note over C,A: Container Creation Flow
+    
+    C->>G: POST /api/containers<br/>(Create Container Request)
+    G->>D: docker.createContainer()<br/>(node:alpine image)
+    D-->>G: Container Created
+    G->>D: container.start()
+    D-->>G: Container Running
+    
+    Note over G: Setup AppContainer Service
+    G->>D: docker exec (install npm, socket.io-client)
+    G->>D: docker exec (start AppContainer service)
+    
+    G-->>C: HTTP 200: {id, websocketUrl, port}
+    
+    Note over C,A: WebSocket Connection Establishment
+    
+    C->>G: WebSocket Connect<br/>(ws://localhost:9001/containers)
+
+    C->>G: WS: join-container(containerId)
+    Note over G: Client joins container room
+    
+    A->>G: WebSocket Connect<br/>(Multiple fallback URLs)
+    G-->>A: WebSocket Connected
+    
+    A->>G: WS: join-container(containerId)
+    Note over G: AppContainer joins same room
+    
+    A->>G: WS: app-container-ready(containerId)
+    Note over G: Update containerStates Map<br/>appContainerConnected = true
+    G->>C: WS: app-container-connected
+    
+    Note over A: Initialize Terminal Shell
+    A->>G: WS: terminal-ready(containerId)
+    Note over G: Update containerStates Map<br/>terminalReady = true
+    G->>C: WS: terminal-ready
+    
+    Note over C,A: Runtime Operations
+    
+    rect rgb(240, 248, 255)
+        Note over C,A: Terminal I/O Flow
+        C->>G: WS: terminal-input{containerId, command}
+        G->>A: WS: terminal-input{containerId, command}
+        Note over A: Execute command in shell
+        A->>G: WS: terminal-output{type: stdout, data}
+        G->>C: WS: terminal-output{type: stdout, data}
+    end
+    
+    rect rgb(240, 255, 240)
+        Note over C,A: File Upload Flow
+        C->>G: WS: send-file{containerId, path, content}
+        G->>A: WS: file-received{path, content}
+        Note over A: Write file to filesystem
+    end
+    
+    rect rgb(255, 248, 240)
+        Note over C,A: Zip Upload Flow
+        C->>G: WS: send-zip{containerId, zipBuffer, extractPath}
+        G->>A: WS: zip-received{zipBuffer, extractPath}
+        Note over A: Extract zip to specified path
+    end
+    
+    Note over C,A: State Handling for Reconnections
+    
+    rect rgb(255, 240, 255)
+        Note over C,G: Client Reconnection Scenario
+        C->>G: WebSocket Connect (after disconnect)
+        C->>G: WS: join-container(containerId)
+        Note over G: Check containerStates Map
+        alt AppContainer is connected
+            G->>C: WS: app-container-connected<br/>(Replay missed event)
+        end
+        alt Terminal is ready
+            G->>C: WS: terminal-ready<br/>(Replay missed event)
+        end
+    end
+    
+    Note over C,A: Container Management Operations
+    
+    C->>G: GET /api/containers/:id<br/>(Query Status)
+    G->>D: container.inspect()
+    D-->>G: Container Status
+    G-->>C: HTTP 200: {status, ...}
+    
+    C->>G: DELETE /api/containers/:id<br/>(Terminate)
+    G->>D: container.stop() & container.remove()
+    D-->>G: Container Removed
+    Note over G: Clean up containerStates Map
+    G-->>C: HTTP 200: Success
+    
+    Note over C,A: Key Technical Details
+    
+    rect rgb(250, 250, 250)
+        Note right of A: AppContainer Networking<br/>• Tries multiple URLs for connection<br/>• host.docker.internal:9001<br/>• 172.17.0.1:9001<br/>• localhost:9001
+        
+        Note right of G: State Management<br/>• containerStates Map tracks:<br/>  - appContainerConnected<br/>  - terminalReady<br/>• Enables event replay on reconnect
+        
+        Note right of C: Progress Tracking<br/>• containerCreated<br/>• websocketCreated<br/>• clientConnected<br/>• appContainerConnected<br/>• terminalReady
+    end

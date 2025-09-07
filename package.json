@@ -1,0 +1,27 @@
+{
+  "name": "webcontainers",
+  "version": "1.0.0",
+  "description": "Container Management Service Monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "start": "pnpm build && pnpm -r --parallel start",
+    "dev": "pnpm -r --parallel dev",
+    "clean": "pnpm -r clean && rm -rf dist",
+    "lint": "pnpm -r lint",
+    "start:client": "pnpm --filter client-app start",
+    "start:gateway": "pnpm --filter container-gw build && pnpm --filter container-gw start",
+    "start:container": "pnpm --filter app-container build && pnpm --filter app-container start"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.1",
+    "@typescript-eslint/eslint-plugin": "^8.8.1",
+    "@typescript-eslint/parser": "^8.8.1",
+    "eslint": "^9.0.0",
+    "typescript": "^5.9.2"
+  }
+}

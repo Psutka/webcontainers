@@ -1,0 +1,359 @@
+openapi: 3.0.3
+info:
+  title: Container Gateway API
+  description: |
+    Container Management Service API for creating, managing, and terminating Docker containers.
+    
+    This API provides endpoints for dynamic Docker container management with WebSocket communication 
+    capabilities. Each container runs a Node.js service (AppContainer) that enables real-time 
+    terminal access, file operations, and web application hosting.
+
+    ## WebSocket Communication
+    In addition to HTTP endpoints, the service provides WebSocket connectivity at `/containers` namespace
+    for real-time communication between clients and containers.
+
+    ## Container Lifecycle
+    1. Create container via POST `/api/containers`
+    2. Connect to WebSocket using returned `websocketUrl`
+    3. Perform file operations and terminal commands via WebSocket
+    4. Query status via GET `/api/containers/{id}`
+    5. Terminate via DELETE `/api/containers/{id}`
+  version: 1.0.0
+  contact:
+    name: Container Management Service
+  license:
+    name: Private
+servers:
+  - url: http://localhost:9001
+    description: Development server
+  - url: http://localhost:3001
+    description: Alternative development server
+paths:
+  /api/containers:
+    post:
+      summary: Create new Docker container
+      description: |
+        Creates a new Docker container based on `node:alpine` image with the following setup:
+        - Installs npm and development tools
+        - Injects and starts AppContainer service
+        - Configures WebSocket communication
+        - Sets up port forwarding for web applications
+      operationId: createContainer
+      tags:
+        - Containers
+      responses:
+        '200':
+          description: Container created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateContainerResponse'
+              examples:
+                success:
+                  summary: Successful container creation
+                  value:
+                    id: "abc123-def456-ghi789"
+                    status: "running"
+                    websocketUrl: "http://localhost:9001/containers"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                docker_error:
+                  summary: Docker operation failed
+                  value:
+                    statusCode: 500
+                    message: "Failed to create container: Docker daemon not running"
+                    error: "Internal Server Error"
+    get:
+      summary: List all containers
+      description: Returns a list of all containers managed by the gateway
+      operationId: getAllContainers
+      tags:
+        - Containers
+      responses:
+        '200':
+          description: List of all containers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AppContainer'
+              examples:
+                containers_list:
+                  summary: Multiple containers
+                  value:
+                    - id: "abc123-def456-ghi789"
+                      containerId: "docker-container-id-1"
+                      status: "running"
+                      websocketUrl: "http://localhost:9001/containers"
+                      port: 49152
+                    - id: "xyz789-uvw456-rst123"
+                      containerId: "docker-container-id-2"
+                      status: "stopped"
+                      websocketUrl: "http://localhost:9001/containers"
+                      port: 49153
+  /api/containers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Container ID (UUID)
+        schema:
+          type: string
+          format: uuid
+          example: "abc123-def456-ghi789"
+    get:
+      summary: Get container status
+      description: |
+        Retrieves the current status of a specific container.
+        Status reflects the actual Docker container state.
+      operationId: getContainerStatus
+      tags:
+        - Containers
+      responses:
+        '200':
+          description: Container status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContainerStatusResponse'
+              examples:
+                running:
+                  summary: Container is running
+                  value:
+                    id: "abc123-def456-ghi789"
+                    status: "running"
+                stopped:
+                  summary: Container is stopped
+                  value:
+                    id: "abc123-def456-ghi789"
+                    status: "stopped"
+        '404':
+          description: Container not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_found:
+                  summary: Container does not exist
+                  value:
+                    statusCode: 404
+                    message: "Failed to get container status: Container abc123-def456-ghi789 not found"
+                    error: "Not Found"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Terminate container
+      description: |
+        Stops and removes the Docker container, cleaning up all associated resources.
+        This action is irreversible and will terminate all processes running in the container.
+      operationId: terminateContainer
+      tags:
+        - Containers
+      responses:
+        '200':
+          description: Container terminated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TerminateContainerResponse'
+              examples:
+                success:
+                  summary: Successful termination
+                  value:
+                    success: true
+                    message: "Container terminated successfully"
+        '404':
+          description: Container not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                termination_failed:
+                  summary: Failed to terminate container
+                  value:
+                    statusCode: 500
+                    message: "Failed to terminate container: Docker container is not running"
+                    error: "Internal Server Error"
+components:
+  schemas:
+    AppContainer:
+      type: object
+      description: Complete container information including Docker details
+      required:
+        - id
+        - containerId
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique container identifier generated by the gateway
+          example: "abc123-def456-ghi789"
+        containerId:
+          type: string
+          description: Docker container ID
+          example: "a1b2c3d4e5f6789"
+        status:
+          type: string
+          enum:
+            - creating
+            - running
+            - stopped
+            - terminated
+            - deleted
+          description: Current container status
+          example: "running"
+        websocketUrl:
+          type: string
+          format: uri
+          description: WebSocket URL for real-time communication
+          example: "http://localhost:9001/containers"
+        port:
+          type: integer
+          minimum: 1024
+          maximum: 65535
+          description: Host port mapped to container port 3000 for web applications
+          example: 49152
+    CreateContainerResponse:
+      type: object
+      description: Response when creating a new container
+      required:
+        - id
+        - status
+        - websocketUrl
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique container identifier
+          example: "abc123-def456-ghi789"
+        status:
+          type: string
+          description: Initial container status
+          example: "running"
+        websocketUrl:
+          type: string
+          format: uri
+          description: WebSocket URL for communication with this container
+          example: "http://localhost:9001/containers"
+    ContainerStatusResponse:
+      type: object
+      description: Container status information
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Container identifier
+          example: "abc123-def456-ghi789"
+        status:
+          type: string
+          enum:
+            - creating
+            - running
+            - stopped
+            - terminated
+            - deleted
+          description: Current container status
+          example: "running"
+    TerminateContainerResponse:
+      type: object
+      description: Response when terminating a container
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          description: Whether termination was successful
+          example: true
+        message:
+          type: string
+          description: Human-readable status message
+          example: "Container terminated successfully"
+    ErrorResponse:
+      type: object
+      description: Standard error response format
+      required:
+        - statusCode
+        - message
+        - error
+      properties:
+        statusCode:
+          type: integer
+          description: HTTP status code
+          example: 500
+        message:
+          type: string
+          description: Detailed error message
+          example: "Failed to create container: Docker daemon not running"
+        error:
+          type: string
+          description: Error category
+          example: "Internal Server Error"
+  parameters:
+    ContainerId:
+      name: id
+      in: path
+      required: true
+      description: Unique container identifier (UUID)
+      schema:
+        type: string
+        format: uuid
+        example: "abc123-def456-ghi789"
+tags:
+  - name: Containers
+    description: |
+      Container lifecycle management operations.
+      
+      Containers are Docker-based isolated environments running Node.js applications
+      with real-time WebSocket communication capabilities.
+      
+      ## WebSocket Events
+      
+      After creating a container and connecting to the WebSocket, the following events are available:
+      
+      **Client → Gateway Events:**
+      - `join-container` - Join a container room for communication
+      - `terminal-input` - Send commands to container shell
+      - `send-file` - Upload individual files to container
+      - `send-zip` - Upload and extract zip archives
+      
+      **Gateway → Client Events:**
+      - `app-container-connected` - Container service is ready
+      - `terminal-ready` - Shell is initialized
+      - `terminal-output` - Command output from container shell
+      - `client-joined` - Another client joined the container room
+      
+      ## Environment Variables
+      
+      The gateway requires these environment variables:
+      - `PORT` - Server port (default: 9001)
+      
+      Containers are automatically configured with:
+      - `CONTAINER_ID` - Unique container identifier
+      - `GATEWAY_URL` - WebSocket endpoint for communication
+      - `NODE_ENV` - Set to 'development'
+externalDocs:
+  description: Project Repository
+  url: https://github.com/example/webcontainers
