@@ -134,13 +134,37 @@ export class ContainerGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   @SubscribeMessage('send-zip')
   handleSendZip(
-    @MessageBody() data: { containerId: string; zipBuffer: ArrayBuffer; extractPath: string },
+    @MessageBody() data: { containerId: string; zipBuffer: Uint8Array | ArrayBuffer; extractPath: string },
     @ConnectedSocket() client: Socket,
   ) {
+    this.logger.log(`[DEBUG] Received send-zip event from client ${client.id}`);
+    this.logger.log(`[DEBUG] Container ID: ${data.containerId}, Extract Path: ${data.extractPath}`);
+    this.logger.log(`[DEBUG] Zip buffer type: ${data.zipBuffer?.constructor.name}`);
+    this.logger.log(`[DEBUG] Zip buffer size: ${data.zipBuffer ? (data.zipBuffer.byteLength || (data.zipBuffer as Uint8Array).length) : 'undefined'} bytes`);
+    
+    if (!data.containerId) {
+      this.logger.error(`[DEBUG] No containerId provided in send-zip event`);
+      return;
+    }
+    
+    if (!data.zipBuffer) {
+      this.logger.error(`[DEBUG] No zipBuffer provided in send-zip event`);
+      return;
+    }
+    
+    // Convert Uint8Array back to ArrayBuffer if needed
+    let arrayBuffer: ArrayBuffer;
+    if (data.zipBuffer instanceof Uint8Array) {
+      this.logger.log(`[DEBUG] Converting Uint8Array to ArrayBuffer`);
+      arrayBuffer = data.zipBuffer.buffer.slice(data.zipBuffer.byteOffset, data.zipBuffer.byteOffset + data.zipBuffer.byteLength) as ArrayBuffer;
+    } else {
+      arrayBuffer = data.zipBuffer as ArrayBuffer;
+    }
+    
     this.logger.log(`Zip file sent to container ${data.containerId} for extraction to ${data.extractPath}`);
     
     this.server.to(data.containerId).emit('zip-received', {
-      zipBuffer: data.zipBuffer,
+      zipBuffer: arrayBuffer,
       extractPath: data.extractPath,
     });
   }

@@ -90,8 +90,18 @@ export const useWebSocket = (
   };
   
   const sendZip = (zipBuffer: ArrayBuffer, extractPath: string) => {
+    console.log(`[DEBUG] sendZip called - containerId: ${containerId}, extractPath: ${extractPath}`);
+    console.log(`[DEBUG] socket: ${socket ? 'exists' : 'null'}, isConnected: ${isConnected}`);
+    console.log(`[DEBUG] zipBuffer size: ${zipBuffer ? zipBuffer.byteLength : 'undefined'} bytes`);
+    
     if (socket && isConnected) {
-      socket.emit('send-zip', { containerId, zipBuffer, extractPath });
+      console.log(`[DEBUG] Converting ArrayBuffer to Buffer for Socket.IO`);
+      // Convert ArrayBuffer to Buffer for better Socket.IO compatibility
+      const buffer = new Uint8Array(zipBuffer);
+      console.log(`[DEBUG] Emitting send-zip event with Buffer of size: ${buffer.length}`);
+      socket.emit('send-zip', { containerId, zipBuffer: buffer, extractPath });
+    } else {
+      console.error(`[DEBUG] Cannot send zip - socket: ${socket ? 'exists' : 'null'}, connected: ${isConnected}`);
     }
   };
   

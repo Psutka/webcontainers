@@ -172,17 +172,17 @@ export class ContainersService {
       const scriptPath = path.join(__dirname, '../../src/scripts/setup-container.js');
       const { appContainerCode } = require(scriptPath);
 
-      // Install socket.io-client in the container first
-      this.logger.log('Installing socket.io-client...');
+      // Install socket.io-client and other dependencies in the container first
+      this.logger.log('Installing dependencies...');
       const installCmd = await dockerContainer.exec({
-        Cmd: ['sh', '-c', 'cd /app && npm init -y && npm install socket.io-client'],
+        Cmd: ['sh', '-c', 'cd /app && npm init -y && npm install socket.io-client fs-extra unzipper'],
         AttachStdout: true,
         AttachStderr: true,
       });
 
       const installStream = await installCmd.start({ Detach: false });
       await this.waitForExec(installStream);
-      this.logger.log('socket.io-client installed successfully');
+      this.logger.log('Dependencies installed successfully');
 
       // Create the AppContainer script file inside the container
       const createFileCmd = await dockerContainer.exec({

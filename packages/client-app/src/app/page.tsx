@@ -25,7 +25,7 @@ export default function Home() {
 
   const addMessage = useCallback((type: MessageWindowItem['type'], message: string) => {
     const newMessage: MessageWindowItem = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
       timestamp: new Date(),
       type,
       message

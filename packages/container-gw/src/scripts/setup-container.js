@@ -1,4 +1,4 @@
-// Script to set up AppContainer service inside Docker container
+// Script to set up AppContainer service inside Docker container with zip support
 const fs = require('fs');
 const path = require('path');
 
@@ -192,6 +192,33 @@ class AppContainer {
         console.log('File written successfully:', fullPath);
       } catch (error) {
         console.error('Error writing file:', error);
+      }
+    });
+
+    this.socket.on('zip-received', async (data) => {
+      try {
+        console.log('Received zip file for extraction to:', data.extractPath);
+        const unzipper = require('unzipper');
+        const { Readable } = require('stream');
+        const fs = require('fs-extra');
+        const path = require('path');
+        
+        // Ensure the extract directory exists
+        const fullExtractPath = path.resolve(data.extractPath);
+        await fs.ensureDir(fullExtractPath);
+        
+        // Convert ArrayBuffer to Buffer and create readable stream
+        const buffer = Buffer.from(data.zipBuffer);
+        const readable = Readable.from(buffer);
+        
+        // Extract the zip
+        await readable
+          .pipe(unzipper.Extract({ path: fullExtractPath }))
+          .promise();
+        
+        console.log('Zip file extracted successfully to:', fullExtractPath);
+      } catch (error) {
+        console.error('Error extracting zip file:', error);
       }
     });
   }
