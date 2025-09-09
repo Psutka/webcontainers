@@ -29,14 +29,31 @@ export class ContainerGateway implements OnGatewayConnection, OnGatewayDisconnec
     terminalReady: boolean;
   }>();
 
+  // Track which containers each client is associated with
+  private clientContainers = new Map<string, Set<string>>();
+
   constructor(private readonly containersService: ContainersService) {}
 
   handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
   }
 
-  handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
+    
+    // Get containers associated with this client
+    const containers = this.clientContainers.get(client.id);
+    if (containers && containers.size > 0) {
+      this.logger.log(`Cleaning up ${containers.size} containers for disconnected client ${client.id}`);
+      
+      // Check each container for cleanup after client leaves
+      for (const containerId of containers) {
+        await this.checkAndCleanupContainer(containerId);
+      }
+    }
+    
+    // Remove client from tracking
+    this.clientContainers.delete(client.id);
   }
 
   @SubscribeMessage('join-container')
@@ -46,6 +63,12 @@ export class ContainerGateway implements OnGatewayConnection, OnGatewayDisconnec
   ) {
     client.join(containerId);
     this.logger.log(`Client ${client.id} joined container ${containerId}`);
+    
+    // Track that this client is associated with this container
+    if (!this.clientContainers.has(client.id)) {
+      this.clientContainers.set(client.id, new Set<string>());
+    }
+    this.clientContainers.get(client.id)!.add(containerId);
     
     // Send current container state to the newly joined client
     const containerState = this.containerStates.get(containerId);
@@ -167,5 +190,51 @@ export class ContainerGateway implements OnGatewayConnection, OnGatewayDisconnec
       zipBuffer: arrayBuffer,
       extractPath: data.extractPath,
     });
+  }
+
+  @SubscribeMessage('leave-container')
+  handleLeaveContainer(
+    @MessageBody() containerId: string,
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.leave(containerId);
+    this.logger.log(`Client ${client.id} left container ${containerId}`);
+    
+    // Remove container from client tracking
+    const clientContainers = this.clientContainers.get(client.id);
+    if (clientContainers) {
+      clientContainers.delete(containerId);
+      if (clientContainers.size === 0) {
+        this.clientContainers.delete(client.id);
+      }
+    }
+    
+    // Check if container should be cleaned up
+    this.checkAndCleanupContainer(containerId);
+  }
+
+  private async checkAndCleanupContainer(containerId: string) {
+    try {
+      // Check how many clients are still in this container's room
+      const room = this.server.sockets.adapter.rooms.get(containerId);
+      const remainingClients = room ? room.size : 0;
+      
+      this.logger.log(`Container ${containerId} has ${remainingClients} remaining clients`);
+      
+      // If no clients are connected to this container, clean it up
+      if (remainingClients === 0) {
+        this.logger.log(`No remaining clients for container ${containerId}, terminating...`);
+        
+        // Clean up container state
+        this.containerStates.delete(containerId);
+        
+        // Terminate the actual container
+        await this.containersService.terminateContainer(containerId);
+        
+        this.logger.log(`Container ${containerId} terminated successfully`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to cleanup container ${containerId}: ${error.message}`);
+    }
   }
 }

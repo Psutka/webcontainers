@@ -73,6 +73,10 @@ export const useWebSocket = (
     setSocket(newSocket);
     
     return () => {
+      // Gracefully leave the container before closing
+      if (containerId) {
+        newSocket.emit('leave-container', containerId);
+      }
       newSocket.close();
     };
   }, [containerId, websocketUrl, onClientConnected, onAppContainerConnected, onTerminalReady]);
