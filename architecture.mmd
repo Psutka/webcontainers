@@ -1,0 +1,109 @@
+```mermaid
+graph TB
+    %% User and Browser Layer
+    User[👤 User] --> Browser[🌐 Browser]
+    Browser --> ClientApp
+    
+    %% ClientApp Components
+    subgraph "ClientApp (Next.js - Port 3000)"
+        ClientApp[Client Application]
+        MessageWindow[📝 Message Window<br/>System notifications]
+        TerminalWindow[💻 Terminal Window<br/>Interactive shell]
+        PreviewWindow[👁️ Preview Window<br/>Embedded iframe]
+        ConnectionProgress[📊 Connection Progress<br/>Real-time tracking]
+        useWebSocket[🔌 useWebSocket Hook<br/>WebSocket client]
+        
+        ClientApp --> MessageWindow
+        ClientApp --> TerminalWindow
+        ClientApp --> PreviewWindow
+        ClientApp --> ConnectionProgress
+        ClientApp --> useWebSocket
+    end
+    
+    %% Container Gateway
+    subgraph "ContainerGw (NestJS - Port 9001)"
+        ContainerGw[Container Gateway]
+        ContainerController[🎮 Containers Controller<br/>REST API endpoints]
+        ContainerService[⚙️ Containers Service<br/>Docker management]
+        ContainerGateway[🔄 Container Gateway<br/>WebSocket handler]
+        ContainerStates[📊 Container States Map<br/>State tracking]
+        SetupScript[📜 setup-container.js<br/>Injection script]
+        
+        ContainerGw --> ContainerController
+        ContainerGw --> ContainerService
+        ContainerGw --> ContainerGateway
+        ContainerGateway --> ContainerStates
+        ContainerService --> SetupScript
+    end
+    
+    %% Docker Layer
+    subgraph "Docker Environment"
+        DockerEngine[🐳 Docker Engine]
+        
+        subgraph "Docker Container (node:alpine)"
+            AppContainer[📦 AppContainer Service<br/>Injected via setup script]
+            TerminalService[⌨️ Terminal Service<br/>Shell execution]
+            FileService[📁 File Service<br/>File operations]
+            WebAppService[🌐 WebApp Service<br/>Static server :3000]
+            Shell[🐚 Interactive Shell<br/>/bin/sh]
+            FileSystem[💾 Container Filesystem<br/>/app working directory]
+            
+            AppContainer --> TerminalService
+            AppContainer --> FileService
+            AppContainer --> WebAppService
+            TerminalService --> Shell
+            FileService --> FileSystem
+            WebAppService --> FileSystem
+        end
+        
+        DockerEngine --> AppContainer
+    end
+    
+    %% API Connections
+    useWebSocket -.->|HTTP REST API| ContainerController
+    ContainerController -.->|Docker API| ContainerService
+    ContainerService -.->|Dockerode| DockerEngine
+    ContainerService -.->|Inject & Execute| SetupScript
+    
+    %% WebSocket Connections
+    useWebSocket ==>|WebSocket /containers| ContainerGateway
+    ContainerGateway ==>|WebSocket Events| AppContainer
+    
+    %% Event Flows
+    subgraph "WebSocket Events"
+        direction LR
+        ClientEvents[📤 Client → Gateway<br/>• join-container<br/>• terminal-input<br/>• send-file<br/>• send-zip]
+        ContainerEvents[📥 Container → Gateway → Client<br/>• app-container-ready<br/>• terminal-ready<br/>• terminal-output]
+    end
+    
+    %% Container Lifecycle
+    subgraph "Container Lifecycle"
+        direction LR
+        Create[1. Create Container<br/>POST /api/containers] 
+        Inject[2. Inject AppContainer<br/>setup-container.js]
+        Connect[3. AppContainer Connects<br/>WebSocket to Gateway]
+        Ready[4. Services Ready<br/>Terminal & File ops]
+        
+        Create --> Inject --> Connect --> Ready
+    end
+    
+    %% Data Flow Annotations
+    useWebSocket -.->|1. Create container| ContainerController
+    ContainerGateway -.->|2. Container info| useWebSocket
+    useWebSocket ==>|3. Join container room| ContainerGateway
+    ContainerGateway ==>|4. Terminal I/O| AppContainer
+    AppContainer ==>|5. File operations| FileService
+    PreviewWindow -.->|6. Preview web apps| WebAppService
+    
+    %% Styling
+    classDef clientApp fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef gateway fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef container fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef docker fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef service fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    
+    class ClientApp,MessageWindow,TerminalWindow,PreviewWindow,ConnectionProgress,useWebSocket clientApp
+    class ContainerGw,ContainerController,ContainerService,ContainerGateway,ContainerStates,SetupScript gateway
+    class AppContainer,TerminalService,FileService,WebAppService container
+    class DockerEngine,Shell,FileSystem docker
+```

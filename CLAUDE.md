@@ -79,6 +79,16 @@ pnpm --filter container-gw lint              # ESLint with auto-fix
 pnpm --filter container-gw format            # Prettier formatting
 pnpm --filter client-app lint                # Next.js ESLint
 pnpm --filter app-container lint             # ESLint for AppContainer
+
+# Build Commands  
+pnpm --filter client-app build               # Next.js production build
+pnpm --filter container-gw build             # NestJS build
+pnpm --filter app-container build            # TypeScript compilation
+
+# Clean Commands
+pnpm --filter client-app clean               # Remove .next directory
+pnpm --filter container-gw clean             # Remove dist directory  
+pnpm --filter app-container clean            # Remove dist directory
 ```
 
 ## Critical Architecture Patterns
